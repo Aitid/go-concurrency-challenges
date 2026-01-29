@@ -132,9 +132,14 @@ func TestMerge(t *testing.T) {
 		}()
 
 		out := merge(ctx, ch)
+		time.Sleep(100 * time.Millisecond)
 
-		<-out
-		cancel()
+		select {
+		case <-out:
+			cancel()
+		default:
+			t.Fatal("out is blocked")
+		}
 
 		time.Sleep(200 * time.Millisecond)
 
