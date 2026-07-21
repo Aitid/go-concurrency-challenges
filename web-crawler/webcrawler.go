@@ -60,6 +60,11 @@ func (c *APICrawler) Crawle(ctx context.Context, url string) {
 			var rCh chan []Page
 			var nextPage Page
 
+			if count == 0 {
+				close(c.jobCh)
+				return
+			}
+
 			if len(queue) > 0 {
 				rCh = c.resCh
 				nextPage = queue[0]
@@ -68,9 +73,10 @@ func (c *APICrawler) Crawle(ctx context.Context, url string) {
 			case pages := <-rCh:
 				count--
 				for _, res := range pages {
-					if !visited[res.url] && c.maxDepth < res.depth {
+					if !visited[res.url] && c.maxDepth >= res.depth {
 						count++
 						queue = append(queue, Page{url: res.url, depth: res.depth})
+						visited[res.url] = true
 					}
 				}
 			case c.jobCh <- nextPage:
@@ -93,20 +99,20 @@ func (c *APICrawler) Crawle(ctx context.Context, url string) {
 					}
 
 					pages, err := c.client.Fetch(ctx, job.url)
+					var resPages []Page
 					if err != nil {
 						fmt.Println(job.url, " isn't available")
 					} else {
 						fmt.Println(job.url, " is handled")
-						resPages := []Page{}
 						for _, page := range pages {
 							resPages = append(resPages, Page{url: page, depth: job.depth + 1})
 						}
 
-						select {
-						case c.resCh <- resPages:
-						case <-ctx.Done():
-							return
-						}
+					}
+					select {
+					case c.resCh <- resPages:
+					case <-ctx.Done():
+						return
 					}
 				case <-ctx.Done():
 					return
